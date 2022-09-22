@@ -1,0 +1,75 @@
+
+// Append appends a value to the dictionary and returns the key. If something
+// goes wrong, Append returns -1. In that case, no value is added.
+int append(int value, EfList d) {
+  // check values
+  if (d.n != 0 && (d.length <= d.n || value < d.pValue || d.maxValue < value)) {
+    return -1;
+  }
+  d.pValue = value;
+  d.n++;
+
+  // higher bits processing
+  int hValue = (value >> d.sizeLValue) + (d.n - 1);
+  d.b[hValue >> 6] |= 1 << (hValue & 63);
+  if (d.sizeLValue == 0) {
+    return d.n - 1;
+  }
+
+  // lower bits processing
+  int lValue = value & d.lMask;
+  int offset = d.sizeH + (d.n - 1) * d.sizeLValue;
+  d.b[offset >> 6] |= lValue << (offset & 63);
+  int msb = lValue >> (64 - offset & 63);
+  if (msb != 0) {
+    d.b[offset >> 6 + 1] = msb;
+  }
+  return d.n - 1;
+}
+
+// build encodes a monotone increasing array of positive integers
+// into an Elias-Fano bit sequence. build will return an error
+// when the values are not increasing monotonically.
+
+// Values reads all numbers from the dictionary.
+
+
+
+// test
+  group("Group Test New/Append", () {
+    for (var i = 0; i < testCases.length; i++) {
+      TestCase tc = testCases[i];
+      EfList d = funcNew(tc.inp.length, tc.inp[tc.inp.length - 1]);
+
+      test("Testing Append", () {
+        funcNew(tc.inp.length, tc.inp[tc.inp.length - 1]);
+
+        for (var j = 0; j < tc.inp.length; j++) {
+          int k = append(tc.inp[j], d);
+          int want = tc.inp[j];
+          int got = d.value(j);
+
+          expect(k != -1, true);
+          expect(got, want);
+        }
+      });
+    }
+  });
+
+      test("Append ${n}", () {
+        EfList d = funcNew(inp.length, inp[inp.length - 1]);
+        List<int> val = d.values;
+
+        for (var i = 0; i < inp.length; i++) {
+          var v = inp[i];
+          var j = append(v, d);
+          expect(j != -1, true);
+        }
+
+        for (var i = 0; i < val.length; i++) {
+          int want = inp[i];
+          int got = val[i];
+
+          expect(got, want);
+        }
+      });
