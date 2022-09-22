@@ -4,14 +4,13 @@ import 'package:tuple/tuple.dart';
 import 'select.dart';
 
 class EfList {
-  Uint64List b = Uint64List(0);
+  int length = 0; // number of entries that can be stored in the dictionary
+  Uint32List b = Uint32List(0);
   int sizeLValue = 0; // bit length of a lValue
   int sizeH = 0; // bit length of the higher bits array H
-  int n = 0; // number of entries in the dictionary
   int lMask = 0; // mask to isolate lValue
   int maxValue = 0; // universe of the Elias-Fano algorithm
   int pValue = 0; // previously added value: helper value to check monotonicity
-  int length = 0; // number of entries that can be stored in the dictionary
   // From constructs a dictionary from a list of values.
   EfList(List<int> values) {
     if (values.isEmpty) {
@@ -25,25 +24,25 @@ class EfList {
     maxValue = values.last;
     sizeLValue = max(0, (maxValue ~/ length).bitLength - 1);
     //Returns the minimum number of bits required to store this integer.
-    sizeH = length + (maxValue >> sizeLValue).toInt();
-    b = Uint64List((sizeH + length * sizeLValue + 63) >> 6);
+    sizeH = length + (maxValue >> sizeLValue);
+    b = Uint32List((sizeH + length * sizeLValue + 31) >> 5);
     lMask = (1 << sizeLValue) - 1;
     int offset = sizeH;
 
     for (var i = 0; i < values.length; i++) {
       //higher bits processing
-      int hValue = (values[i] >> sizeLValue) + i.toInt();
-      b[hValue >> 6] |= 1 << (hValue & 63);
+      int hValue = (values[i] >> sizeLValue) + i;
+      b[hValue >> 5] |= 1 << (hValue & 31);
       if (sizeLValue == 0) {
         continue;
       }
 
       //lower bits processing
       int lValue = values[i] & lMask;
-      b[offset >> 6] |= lValue << (offset & 63);
-      int msb = lValue >> (64 - offset & 63);
+      b[offset >> 5] |= lValue << (offset & 31);
+      int msb = lValue >> (32 - (offset & 31));
       if (msb != 0) {
-        b[offset >> 6 + 1] = msb;
+        b[offset >> 5 + 1] = msb;
       }
       offset += sizeLValue;
     }
@@ -53,18 +52,17 @@ class EfList {
   int operator [](int k) => b.hValue(k) << sizeLValue | lValue(k);
 
 // Value2 returns the k-th value in the dictionary.
-  int value(int k) => (b.select1(k) - k) << sizeLValue | lValue(k);
-
-  int hValue2(int k) => b.select1(k) - k;
+  int value(int k) => (b.select(k) - k) << sizeLValue | lValue(k);
+  int hValue2(int k) => b.select(k) - k;
 
 // hValue2 returns the higher bits (bucket value) of the k-th value.
   int lValue(int k) {
     int offset = sizeH + k * sizeLValue;
-    int off63 = offset & 63;
-    int val = b[offset >> 6] >> off63 & lMask;
+    int off31 = offset & 31;
+    int val = b[offset >> 5] >> off31 & lMask;
 
-    if (off63 + sizeLValue > 64) {
-      val |= b[offset >> 6 + 1] << (64 - off63) & lMask;
+    if (off31 + sizeLValue > 32) {
+      val |= b[offset >> 5 + 1] << (32 - off31) & lMask;
     }
     return val;
   }
@@ -83,10 +81,10 @@ class EfList {
     // k is the number of integers whose high bits are less than hValue.
     // So, k is the key of the first value we need to compare to.
     int k = pos - hValue;
-    int pos63 = pos & 63;
-    int pos64 = pos & ~63;
+    int pos31 = pos & 31;
+    int pos32 = pos & ~31;
 
-    int buf = b[pos64 >> 6] & ~(1 << pos63 - 1);
+    int buf = b[pos32 >> 5] & ~(1 << pos31 - 1);
     // This does not mean that the p+1-th value is larger than or equal to value!
     // The p+1-th value has either the same hValue or a larger one. In case of a
     // larger hValue, this value is the result we are seeking for. In case the
@@ -100,14 +98,14 @@ class EfList {
 
     while (true) {
       while (buf == 0) {
-        pos64 += 64;
-        buf = b[pos64 >> 6];
+        pos32 += 32;
+        buf = b[pos32 >> 5];
       }
 
-      pos63 = buf.trailingZeros;
+      pos31 = buf.trailingZeros;
 
       // check potential solution
-      int hVal = pos64 + pos63 - k;
+      int hVal = pos32 + pos31 - k;
 
       if (hValue < hVal || templValue <= lValue(k)) {
         break;
@@ -116,38 +114,39 @@ class EfList {
       buf &= buf - 1;
       k++;
     }
-    return Tuple2(k, (pos64 + pos63 - k) << sizeLValue | lValue(k));
+    return Tuple2(k, (pos32 + pos31 - k) << sizeLValue | lValue(k));
   }
 
   List<int> get values {
-    List<int> values = List<int>.filled(n, 0);
+    List<int> values = List<int>.filled(length, 0);
     int k = 0;
 
     if (sizeLValue == 0) {
       for (var j = 0; j < b.length; j++) {
-        int p64 = j << 6;
-        while (b[j] != 0) {
-          values[k] = p64 + b[j].trailingZeros - k;
-          b[j] &= b[j] - 1;
+        int bx = b[j];
+        int p32 = j << 5;
+        while (bx != 0) {
+          values[k] = p32 + b[j].trailingZeros - k;
+          bx = bx & (bx - 1);
           k++;
         }
       }
       return values;
     }
 
-    final hValue = Uint64List(1);
     int lValFilter = sizeH;
-    Uint64List a = b.sublist(0, (sizeH + 63) >> 6);
-    for (var j = 0; j < a.length; j++) {
-      a[j] &= (1 << lValFilter) - 1;
-      int p64 = j << 6;
-      while (a[j] != 0) {
-        hValue[0] = p64 + a[j].trailingZeros - k;
-        values[k] = hValue[0] << sizeLValue | lValue(k);
-        a[j] &= a[j] - 1;
+    int e = (sizeH + 31) >> 5;
+    for (var j = 0; j < e; j++) {
+      int bx = b[j];
+      bx = bx & ((1 << lValFilter) - 1);
+      int p32 = j << 5;
+      while (bx != 0) {
+        int hValue = p32 + bx.trailingZeros - k;
+        values[k] = (hValue << sizeLValue) | lValue(k);
+        bx = bx & (bx - 1);
         k++;
       }
-      lValFilter -= 64;
+      lValFilter -= 32;
     }
     return values;
   }

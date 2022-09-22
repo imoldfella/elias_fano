@@ -12,6 +12,38 @@ class TestCase {
 }
 
 void main() {
+  group("Group Test Values Long", () {
+    final n = 1000;
+    final max = 100;
+    final iterations = 1000;
+    var a = List<int>.filled(n, 0);
+
+    for (var k = 0; k < iterations; k++) {
+      final inp = a.sublist(0, 1 + Random().nextInt(max));
+      int prev = 0;
+
+      // creates a random sorted vector
+      for (var i = 0; i < inp.length; i++) {
+        prev += Random().nextInt(max);
+        inp[i] = prev;
+      }
+      test("From $n", () {
+        EfList d = EfList(inp);
+        final val = d.values;
+
+        for (var i = 0; i < val.length; i++) {
+          print("${d.values[i]}  ${val[i]}");
+          int want = inp[i];
+          int got = val[i];
+
+          expect(got, want);
+        }
+      });
+    }
+  });
+}
+
+dontCare() {
   List testCases = [];
   fillTestCases(testCases);
 
@@ -23,7 +55,7 @@ void main() {
       test('Testing SizeLValue and SizeT', () {
         int gotSizeLValue = d.sizeLValue;
         int wantSizeLValue = tc.sizeLValue;
-        int gotSizeT = d.sizeH + d.n * d.sizeLValue;
+        int gotSizeT = d.sizeH + d.length * d.sizeLValue;
         int wantSizeT = tc.sizeT;
 
         expect(gotSizeLValue, wantSizeLValue);
@@ -100,38 +132,6 @@ void main() {
           int got = val[j];
           //print(d.values[j]);
           //int got = values(EfList(tc.inp).item1!)[j];
-
-          expect(got, want);
-        }
-      });
-    }
-  });
-
-  group("Group Test Values Long", () {
-    final n = 1000;
-    final max = 100;
-    final iterations = 1000;
-
-    var a = List<int>.filled(n, 0, growable: true);
-    var inp = List<int>.filled(n, 0, growable: true);
-
-    for (var k = 0; k < iterations; k++) {
-      inp = a.sublist(0, 1 + Random().nextInt(max));
-      int prev = 0;
-
-      // creates a random sorted vector
-      for (var i = 0; i < inp.length; i++) {
-        prev += Random().nextInt(max);
-        inp[i] = prev;
-      }
-      test("From $n", () {
-        EfList d = EfList(inp);
-        final val = d.values;
-
-        for (var i = 0; i < val.length; i++) {
-          print("${d.values[i]}  ${val[i]}");
-          int want = inp[i];
-          int got = val[i];
 
           expect(got, want);
         }
