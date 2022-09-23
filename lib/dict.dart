@@ -34,48 +34,45 @@ class EfList {
       //higher bits processing
       int hValue = (values[i] >> sizeLValue) + i;
       b[hValue >> 5] |= (1 << (hValue & 31));
-      final checkh = this.hValue(i);
-      if (checkh != (hValue - i)) {
-        print("bad high bits $checkh ${hValue - i}");
-      }
       if (sizeLValue == 0) {
         continue;
       }
 
       //lower bits processing. higher bits start at sizeH bits (after high bits)
       int lValue = values[i] & lMask; // get the low bits.
-      int bytePos = offset >> 5;
-      b[bytePos] |= lValue << (offset & 31); // or the bits into place
+      int wordPos = offset >> 5;
+      b[wordPos] |= lValue << (offset & 31); // or the bits into place
 
       // handle the overflow bits, if any. 32 - (offset&31) is how many bits we placed, so we shift those off. why can't lower bits be 0 though? this is a bug? no, if its zero we don't have to do anything anyway, the vector is already 0.
       int msb = lValue >> (32 - (offset & 31));
       if (msb != 0) {
-        b[bytePos + 1] = msb;
-      }
-      final check = this.lValue(i);
-      if (check != lValue) {
-        print("bad $check $lValue");
+        b[wordPos + 1] = msb;
       }
       offset += sizeLValue;
     }
   }
 
   // Value returns the  k-th value in the dictionary.
-  int operator [](int k) => (b.hValue(k) << sizeLValue) | lValue(k);
+  int operator [](int k) {
+    int h = hValue(k);
+    int l = lValue(k);
+    return (h << sizeLValue) | l;
+  }
 
-  // hValue returns the higher bits (bucket value) of the k-th value.
-  int hValue(int k) => b.select(k) - k;
+  int hValue(int k) =>
+      b.select(k) -
+      k; // hValue returns the higher bits (bucket value) of the k-th value.
   int lValue(int k) {
     if (0 == sizeLValue) {
       return 0;
     }
     int offset = sizeH + k * sizeLValue;
-    int bytePos = offset >> 5;
+    int wordPos = offset >> 5;
     int off31 = offset & 31;
-    int val = (b[bytePos] >> off31) & lMask;
+    int val = (b[wordPos] >> off31) & lMask;
 
     if (off31 + sizeLValue > 32) {
-      val = (val | (b[bytePos + 1] << (32 - off31))) & lMask;
+      val = (val | (b[wordPos + 1] << (32 - off31))) & lMask;
     }
     return val;
   }
@@ -130,15 +127,7 @@ class EfList {
     return Tuple2(k, (pos32 + pos31 - k) << sizeLValue | lValue(k));
   }
 
-  List<int> get valuesSlow {
-    List<int> values = List<int>.filled(length, 0);
-    int k = 0;
-
-    for (int i = 0; i < values.length; i++) {
-      values[i] = this[i];
-    }
-    return values;
-  }
+  List<int> get valuesSlow => List<int>.generate(length, (i) => this[i]);
 
   List<int> get values {
     List<int> values = List<int>.filled(length, 0);
@@ -151,73 +140,13 @@ class EfList {
       int p32 = j << 5; // counts all the bits we have passed
       while (bx != 0 && k < values.length) {
         final hv = p32 + bx.trailingZeros - k;
-        if (hv != hValue(k)) {
-          print("bad $hv ${hValue(k)}");
-        }
         final v = (hv << sizeLValue) | lValue(k);
-        if (k >= length || v != this[k]) {
-          print("bad $k $length $v ${this[k]}");
-        }
         values[k] = v;
 
         // we are removing the lowest bit that we just counted, might be clearer to use trailing zeros?
         bx = bx & (bx - 1);
         k++;
       }
-    }
-    return values;
-
-    // int lValFilter = sizeH;
-    // // this finds the first byte past the end of the high bits.
-    // int e = (sizeH + 31) >> 5;
-    // for (var j = 0; j < e; j++) {
-    //   // gets a byte of the unary high bits
-    //   int bx = b[j];
-    //   bx = bx & ((1 << lValFilter) - 1);
-    //   int p32 = j << 5;
-    //   while (bx != 0) {
-    //     int hValue = p32 + bx.trailingZeros - k;
-    //     values[k] = (hValue << sizeLValue) | lValue(k);
-    //     bx = bx & (bx - 1);
-    //     k++;
-    //   }
-    //   lValFilter -= 32;
-    // }
-    // return values;
-  }
-
-  List<int> get valuesbad {
-    List<int> values = List<int>.filled(length, 0);
-    int k = 0;
-
-    if (sizeLValue == 0) {
-      for (var j = 0; j < b.length; j++) {
-        int bx = b[j];
-        int p32 = j << 5;
-        while (bx != 0) {
-          values[k] = p32 + b[j].trailingZeros - k;
-          bx = bx & (bx - 1);
-          k++;
-        }
-      }
-      return values;
-    }
-
-    int lValFilter = sizeH;
-    // this finds the first byte past the end of the high bits.
-    int e = (sizeH + 31) >> 5;
-    for (var j = 0; j < e; j++) {
-      // gets a byte of the unary high bits
-      int bx = b[j];
-      bx = bx & ((1 << lValFilter) - 1);
-      int p32 = j << 5;
-      while (bx != 0) {
-        int hValue = p32 + bx.trailingZeros - k;
-        values[k] = (hValue << sizeLValue) | lValue(k);
-        bx = bx & (bx - 1);
-        k++;
-      }
-      lValFilter -= 32;
     }
     return values;
   }

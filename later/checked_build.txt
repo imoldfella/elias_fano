@@ -1,0 +1,111 @@
+  EfList(List<int> values) {
+    if (values.isEmpty) {
+      return;
+    }
+    values.sort();
+    if (values[0] < 0) {
+      throw "numbers must be positive";
+    }
+    length = values.length;
+    maxValue = values.last;
+    sizeLValue = (maxValue ~/ length).bitLength;
+    // https://www.antoniomallia.it/sorted-integers-compression-with-elias-fano-encoding.html says sizeH = 2n
+    //sizeH = length + (maxValue >> sizeLValue);
+    sizeH = 2 * length;
+    b = Uint32List((sizeH + length * sizeLValue + 31) >> 5);
+    lMask = (1 << sizeLValue) - 1;
+    int offset = sizeH;
+
+    for (var i = 0; i < values.length; i++) {
+      //higher bits processing
+      int hValue = (values[i] >> sizeLValue) + i;
+      b[hValue >> 5] |= (1 << (hValue & 31));
+      final checkh = this.hValue(i);
+      if (checkh != (hValue - i)) {
+        print("bad high bits $checkh ${hValue - i}");
+      }
+      if (sizeLValue == 0) {
+        continue;
+      }
+
+      //lower bits processing. higher bits start at sizeH bits (after high bits)
+      int lValue = values[i] & lMask; // get the low bits.
+      int wordPos = offset >> 5;
+      b[wordPos] |= lValue << (offset & 31); // or the bits into place
+
+      // handle the overflow bits, if any. 32 - (offset&31) is how many bits we placed, so we shift those off. why can't lower bits be 0 though? this is a bug? no, if its zero we don't have to do anything anyway, the vector is already 0.
+      int msb = lValue >> (32 - (offset & 31));
+      if (msb != 0) {
+        b[wordPos + 1] = msb;
+      }
+      final check = this.lValue(i);
+      if (check != lValue) {
+        print("bad $check $lValue");
+      }
+
+      final checkv = this[i];
+      if (values[i] != checkv) {
+        print(
+            "badv $i ${values[i]} ${values[i] >> sizeLValue} ${values[i] & lMask}  ${this[i]} ${this.hValue(i)} ${this.lValue(i)}");
+        print(
+            "badv $i ${values[i]} ${values[i] >> sizeLValue} ${values[i] & lMask}   ${this[i]} ${this.hValue(i)} ${this.lValue(i)}");
+        print(
+            "badv $i ${values[i]} ${values[i] >> sizeLValue} ${values[i] & lMask}  ${this[i]} ${this.hValue(i)} ${this.lValue(i)}");
+        throw "bad bit";
+      }
+      offset += sizeLValue;
+    }
+    for (int i = 0; i < values.length; i++) {
+      final checkv = this[i];
+      if (values[i] != checkv) {
+        print("badv $i ${values[i]} $checkv");
+      }
+    }
+  }
+
+
+    List<int> get values {
+    List<int> values = List<int>.filled(length, 0);
+    int k = 0;
+
+    // we are iterating over high bits, each 1 that we find produces a new value
+    int e = (sizeH + 31) >> 5;
+    for (var j = 0; j < e; j++) {
+      int bx = b[j];
+      int p32 = j << 5; // counts all the bits we have passed
+      while (bx != 0 && k < values.length) {
+        final hv = p32 + bx.trailingZeros - k;
+        if (hv != hValue(k)) {
+          print("bad $hv ${hValue(k)}");
+        }
+        final v = (hv << sizeLValue) | lValue(k);
+        if (k >= length || v != this[k]) {
+          print("bad $k $length $v ${this[k]}");
+        }
+        values[k] = v;
+
+        // we are removing the lowest bit that we just counted, might be clearer to use trailing zeros?
+        bx = bx & (bx - 1);
+        k++;
+      }
+    }
+    return values;
+
+    // int lValFilter = sizeH;
+    // // this finds the first byte past the end of the high bits.
+    // int e = (sizeH + 31) >> 5;
+    // for (var j = 0; j < e; j++) {
+    //   // gets a byte of the unary high bits
+    //   int bx = b[j];
+    //   bx = bx & ((1 << lValFilter) - 1);
+    //   int p32 = j << 5;
+    //   while (bx != 0) {
+    //     int hValue = p32 + bx.trailingZeros - k;
+    //     values[k] = (hValue << sizeLValue) | lValue(k);
+    //     bx = bx & (bx - 1);
+    //     k++;
+    //   }
+    //   lValFilter -= 32;
+    // }
+    // return values;
+  }

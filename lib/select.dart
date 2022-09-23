@@ -53,21 +53,6 @@ extension U32 on List<int> {
 
 extension Bitops on Uint32List {
   List<String> get x => map((e) => e.x).toList() as List<String>;
-  int hValue(int i) {
-    int nOnes = i;
-
-    for (var j = 0; j < length; j++) {
-      int ones = this[j].bitCount();
-      if ((i - ones) < 0) {
-        return (select32(this[j], i) + (j << 6) - nOnes);
-      }
-
-      i -= ones;
-    }
-    return 0;
-  }
-
-  int bitCount() => map((a) => a.bitCount()).reduce((a, b) => a + b);
 
   // select determines the position of the jth 1.
   // this is a very slow way to do this.
