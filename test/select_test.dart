@@ -4,11 +4,64 @@ import 'package:collection/collection.dart';
 import 'package:elias_fano/elias_fano.dart';
 
 void main() {
-  final input = [234, 3458, 31000, 31009];
+  final n = 1000;
+  final max = 100;
+  final iterations = 1000;
+  var a = List<int>.filled(n, 0);
 
-  final v = EfList(input).values;
-  var ok = IterableEquality().equals(input, v);
-  print("$ok $v");
+  for (var k = 0; k < iterations; k++) {
+    final inp = a.sublist(0, 1 + Random().nextInt(max));
+    int prev = 0;
+
+    // creates a random sorted vector
+    for (var i = 0; i < inp.length; i++) {
+      prev += Random().nextInt(max);
+      inp[i] = prev;
+    }
+
+    EfList d = EfList(inp);
+    var r = checkLowBits(inp, d) &&
+        checkHighBits(inp, d) &&
+        IterableEquality().equals(inp, d.valuesSlow);
+    if (!r) {
+      print("boo");
+    }
+  }
+}
+
+void test4() {
+  final input = [234, 3458, 31000, 31009];
+  //final input = [2, 3, 5, 7, 11, 13, 24];
+
+  final v = EfList(input);
+  checkLowBits(input, v);
+  checkHighBits(input, v);
+  var ok = IterableEquality().equals(input, v.values);
+  print("$ok ${v.values}");
+}
+
+bool checkLowBits(List<int> input, EfList v) {
+  for (int i = 0; i < input.length; i++) {
+    final a = input[i] & v.lMask;
+    final b = v.lValue(i);
+    if (a != b) {
+      print("bad $a $b");
+      return false;
+    }
+  }
+  return true;
+}
+
+bool checkHighBits(List<int> input, EfList v) {
+  for (int i = 0; i < input.length; i++) {
+    final a = input[i] >> v.sizeLValue;
+    final b = v.hValue(i);
+    if (a != b) {
+      print("bad $a $b");
+      return false;
+    }
+  }
+  return true;
 }
 
 void test3() {

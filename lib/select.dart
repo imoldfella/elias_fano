@@ -107,7 +107,7 @@ int select32(int x0, int k) {
   // 00110011 = 33
   // 11111111 = ff
   // 11110000 = f0
-  // SWAR - simd
+  // SWAR - fake simd https://www.playingwithpointers.com/blog/swar.html
 
   int x1 = (x0 & 0x5555555555555555) + ((x0 >> 1) & 0x5555555555555555);
   int x2 = (x1 & 0x3333333333333333) + ((x1 >> 2) & 0x3333333333333333);
